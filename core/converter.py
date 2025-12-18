@@ -1,5 +1,8 @@
 from moviepy import AudioFileClip, ColorClip
-from utils import CancelledError
+
+class CancelledError(Exception):
+    """Custom exception to handle task cancellation."""
+    pass
 
 def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(144, 256), fps=1):
     """
