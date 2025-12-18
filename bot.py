@@ -6,7 +6,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import proglog
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait
-import time
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
 from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data, get_stats, get_all_users, clear_all_tasks
@@ -47,6 +46,46 @@ START_BUTTONS = InlineKeyboardMarkup([[
 BACK_BUTTON = InlineKeyboardMarkup([[
     InlineKeyboardButton("⬅️ Back", callback_data="start_ui")
 ]])
+
+# HELPER FUNCTIONS FOR PROGRESS UI
+async def progress_callback(current, total, status_msg, task_name, status_text, start_time, last_update, user_id):
+    if user_id in ongoing_tasks and ongoing_tasks[user_id].is_set():
+        raise CancelledError("Task cancelled by user.")
+    
+    # Update every 4 seconds to avoid flood
+    now = time.time()
+    if now - last_update[0] < 4:
+        return
+    
+    last_update[0] = now
+    box = create_progress_box(current, total, task_name, status_text, start_time)
+    
+    try:
+        await status_msg.edit_text(
+            f"<code>{box}</code>",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("Cancel ❌", callback_data="cancel_task")
+            ]])
+        )
+    except Exception:
+        pass
+
+class TelegramLogger(proglog.ProgressBarLogger):
+    def __init__(self, progress_dict, cancel_event):
+        super().__init__()
+        self.progress_dict = progress_dict
+        self.cancel_event = cancel_event
+
+    def callback(self, **changes):
+        if self.cancel_event.is_set():
+            raise CancelledError("Task cancelled during conversion.")
+        
+        if 'bars' in changes:
+            for bar_name, bar_data in changes['bars'].items():
+                if bar_name == 't':
+                    self.progress_dict['current'] = bar_data['index']
+                    self.progress_dict['total'] = bar_data['total']
 
 @app.on_callback_query()
 async def callback_handler(client, callback_query: CallbackQuery):
