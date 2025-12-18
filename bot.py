@@ -4,10 +4,10 @@ import time
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import proglog
-from pyrogram import Client, filters
+from pyrogram import Client, filters, enums
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
-from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data, get_stats
+from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data, get_stats, get_all_users
 from converter import convert_mp3_to_mp4
 from utils import create_progress_box, CancelledError
 
@@ -16,6 +16,7 @@ load_dotenv()
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+OWNER_ID = int(os.getenv("OWNER_ID", "1751433177")) # Default to a value or 0
 
 # Initialize the Bot
 app = Client(
@@ -33,58 +34,83 @@ if not os.path.exists(DOWNLOAD_DIR):
 # Global dictionary to track cancellation events
 ongoing_tasks = {}
 
-class TelegramLogger(proglog.ProgressBarLogger):
-    """Custom logger for MoviePy to capture progress and handle cancellation."""
-    def __init__(self, data, cancel_event):
-        super().__init__()
-        self.data = data
-        self.cancel_event = cancel_event
+# ADVANCED UI: BUTTONS
+START_BUTTONS = InlineKeyboardMarkup([[
+    InlineKeyboardButton("📖 Help", callback_data="help_ui"),
+    InlineKeyboardButton("📊 Status", callback_data="status_ui")
+], [
+    InlineKeyboardButton("📜 Commands", callback_data="commands_ui")
+]])
 
-    def callback(self, **kwargs):
-        if self.cancel_event.is_set():
-            raise CancelledError("Task cancelled by user.")
-        
-        bar = self.bars.get('chunk') or self.bars.get('tqdm') or self.bars.get('index')
-        if bar:
-            self.data['current'] = bar['index']
-            self.data['total'] = bar['total']
+BACK_BUTTON = InlineKeyboardMarkup([[
+    InlineKeyboardButton("⬅️ Back", callback_data="start_ui")
+]])
 
-async def progress_callback(current, total, status_msg, task_name, status, start_time, last_update, user_id, is_bytes=True):
-    """Callback for Pyrogram to update progress UI with cancellation support."""
-    if user_id in ongoing_tasks and ongoing_tasks[user_id].is_set():
-        raise CancelledError("Task cancelled by user.")
-    
-    now = time.time()
-    if (now - last_update[0]) < 3 and current < total:
-        return
-    
-    last_update[0] = now
-    box = create_progress_box(current, total, task_name, status, start_time, is_bytes=is_bytes)
-    
-    reply_markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Cancel ❌", callback_data="cancel_task")
-    ]])
-    
-    try:
-        await status_msg.edit_text(
-            f"<code>{box}</code>", 
-            parse_mode="html",
-            reply_markup=reply_markup
-        )
-    except Exception:
-        pass
-
-@app.on_callback_query(filters.regex("^cancel_task$"))
-async def cancel_callback_handler(client, callback_query: CallbackQuery):
+@app.on_callback_query()
+async def callback_handler(client, callback_query: CallbackQuery):
+    data = callback_query.data
     user_id = callback_query.from_user.id
-    if user_id in ongoing_tasks:
-        ongoing_tasks[user_id].set()
-        await callback_query.answer("Cancelling task... ⏳", show_alert=True)
-    else:
-        await callback_query.answer("No active task to cancel.", show_alert=True)
-        try: await callback_query.message.delete()
-        except: pass
+    
+    if data == "cancel_task":
+        if user_id in ongoing_tasks:
+            ongoing_tasks[user_id].set()
+            await callback_query.answer("Cancelling task... ⏳", show_alert=True)
+        else:
+            await callback_query.answer("No active task to cancel.", show_alert=True)
+            try: await callback_query.message.delete()
+            except: pass
+            
+    elif data == "start_ui":
+        await callback_query.message.edit_text(
+            "👋 <b>Welcome to MP3 to MP4 Bot!</b>\n\n"
+            "I can convert your MP3 audio files into high-quality MP4 videos with a professional black background.\n\n"
+            "⚡ <b>How to Use:</b>\n"
+            "1. Send any MP3 audio file to me.\n"
+            "2. Wait for the conversion to complete.\n"
+            "3. Download your MP4 video!\n\n"
+            "📖 Use the buttons below for more info.",
+            parse_mode=enums.ParseMode.HTML,
+            reply_markup=START_BUTTONS
+        )
+        
+    elif data == "help_ui":
+        help_text = (
+            "❓ <b>Need Help?</b>\n\n"
+            "This bot is designed to create black-background videos from audio files. Perfect for uploading music to platforms like YouTube or Telegram as video.\n\n"
+            "🛠 <b>Available Commands:</b>\n"
+            "• /start - Restart the bot\n"
+            "• /status - Check bot load and stats\n"
+            "• /commands - List all commands\n"
+            "• /help - Show this help message\n\n"
+            "🛑 <b>Features:</b>\n"
+            "- Real-time progress tracking\n"
+            "- Reliable task cancellation\n"
+            "- Automatic cleanup of temporary files"
+        )
+        await callback_query.message.edit_text(help_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
+        
+    elif data == "commands_ui":
+        commands_text = (
+            "📜 <b>Command List:</b>\n\n"
+            "• /start - Start/Reset the bot\n"
+            "• /help - Get usage instructions\n"
+            "• /status - View bot performance & stats\n"
+            "• /commands - Show this list"
+        )
+        await callback_query.message.edit_text(commands_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
+        
+    elif data == "status_ui":
+        stats = get_stats()
+        status_text = (
+            "🤖 <b>Bot Status Report</b>\n\n"
+            f"📊 <b>Total Processed:</b> {stats['total_conversions']}\n"
+            f"👥 <b>Unique Users:</b> {stats['unique_users']}\n"
+            f"⏳ <b>Current Load:</b> {stats['active_tasks']} active tasks\n\n"
+            "✨ <i>Running smoothly on Render!</i>"
+        )
+        await callback_query.message.edit_text(status_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
 
+# BASIC COMMANDS
 @app.on_message(filters.command("start"))
 async def start_handler(client, message: Message):
     await message.reply_text(
@@ -94,12 +120,16 @@ async def start_handler(client, message: Message):
         "1. Send any MP3 audio file to me.\n"
         "2. Wait for the conversion to complete.\n"
         "3. Download your MP4 video!\n\n"
-        "📖 Use /help to see more options and commands.",
-        parse_mode="html"
+        "📖 Use the buttons below for more info.",
+        parse_mode=enums.ParseMode.HTML,
+        reply_markup=START_BUTTONS
     )
 
 @app.on_message(filters.command("help"))
 async def help_handler(client, message: Message):
+    await help_ui_message(message)
+
+async def help_ui_message(message: Message):
     help_text = (
         "❓ <b>Need Help?</b>\n\n"
         "This bot is designed to create black-background videos from audio files. Perfect for uploading music to platforms like YouTube or Telegram as video.\n\n"
@@ -113,7 +143,7 @@ async def help_handler(client, message: Message):
         "- Reliable task cancellation\n"
         "- Automatic cleanup of temporary files"
     )
-    await message.reply_text(help_text, parse_mode="html")
+    await message.reply_text(help_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
 
 @app.on_message(filters.command("commands"))
 async def commands_list_handler(client, message: Message):
@@ -124,7 +154,7 @@ async def commands_list_handler(client, message: Message):
         "• /status - View bot performance & stats\n"
         "• /commands - Show this list"
     )
-    await message.reply_text(commands_text, parse_mode="html")
+    await message.reply_text(commands_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
 
 @app.on_message(filters.command("status"))
 async def status_handler(client, message: Message):
@@ -136,8 +166,47 @@ async def status_handler(client, message: Message):
         f"⏳ <b>Current Load:</b> {stats['active_tasks']} active tasks\n\n"
         "✨ <i>Running smoothly on Render!</i>"
     )
-    await message.reply_text(status_text, parse_mode="html")
+    await message.reply_text(status_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
 
+# ADMIN TOOLS
+@app.on_message(filters.command("users") & filters.user(OWNER_ID))
+async def users_handler(client, message: Message):
+    stats = get_stats()
+    await message.reply_text(f"👥 <b>Total Unique Users:</b> {stats['unique_users']}", parse_mode=enums.ParseMode.HTML)
+
+@app.on_message(filters.command("broadcast") & filters.user(OWNER_ID))
+async def broadcast_handler(client, message: Message):
+    if not message.reply_to_message:
+        await message.reply_text("❌ Please reply to a message to broadcast it.")
+        return
+    
+    users = get_all_users()
+    count = 0
+    status_msg = await message.reply_text(f"📣 <b>Broadcasting to {len(users)} users...</b>", parse_mode=enums.ParseMode.HTML)
+    
+    for user_id in users:
+        try:
+            await message.reply_to_message.copy(chat_id=user_id)
+            count += 1
+            await asyncio.sleep(0.05) # Rate limit
+        except:
+            pass
+            
+    await status_msg.edit_text(f"✅ <b>Broadcast Complete!</b>\nSuccessfully sent to {count} users.", parse_mode=enums.ParseMode.HTML)
+
+@app.on_message(filters.command("stats") & filters.user(OWNER_ID))
+async def admin_stats_handler(client, message: Message):
+    stats = get_stats()
+    admin_text = (
+        "👑 <b>Admin Dashboard - Stats</b>\n\n"
+        f"✅ <b>Successful Conversions:</b> {stats['total_conversions']}\n"
+        f"👥 <b>Total Users in Database:</b> {stats['unique_users']}\n"
+        f"⏳ <b>Current Processing Tasks:</b> {stats['active_tasks']}\n"
+        f"📁 <b>Temporary Dir Files:</b> {len(os.listdir(DOWNLOAD_DIR))}"
+    )
+    await message.reply_text(admin_text, parse_mode=enums.ParseMode.HTML)
+
+# CORE AUDIO HANDLER
 @app.on_message(filters.audio)
 async def audio_handler(client, message: Message):
     user_id = message.from_user.id
@@ -162,7 +231,7 @@ async def audio_handler(client, message: Message):
     initial_box = create_progress_box(0, message.audio.file_size, task_name, "Downloading Audio...", start_time)
     status_msg = await message.reply_text(
         f"<code>{initial_box}</code>", 
-        parse_mode="html",
+        parse_mode=enums.ParseMode.HTML,
         reply_markup=reply_markup
     )
     
@@ -197,7 +266,7 @@ async def audio_handler(client, message: Message):
                     try: 
                         await status_msg.edit_text(
                             f"<code>{box}</code>", 
-                            parse_mode="html",
+                            parse_mode=enums.ParseMode.HTML,
                             reply_markup=reply_markup
                         )
                     except: pass
@@ -230,11 +299,13 @@ async def audio_handler(client, message: Message):
             log_action(user_id, "CONVERSION_FAILED")
 
     except CancelledError:
-        await status_msg.edit_text("⚠️ Task cancelled by user.")
+        try: await status_msg.edit_text("⚠️ Task cancelled by user.")
+        except: pass
         log_action(user_id, "CONVERSION_CANCELLED")
     except Exception as e:
         print(f"Error: {e}")
-        await message.reply_text(f"❌ Error: {str(e)}")
+        try: await message.reply_text(f"❌ Error: {str(e)}")
+        except: pass
     finally:
         # Cleanup files
         if file_path and os.path.exists(file_path): os.remove(file_path)
@@ -268,17 +339,9 @@ def run_health_check():
     server.serve_forever()
 
 if __name__ == "__main__":
-    # Initialize DB
     init_db()
-    
-    # Start health check server in a separate thread for Render
     threading.Thread(target=run_health_check, daemon=True).start()
-    
-    # Start the bot
     print("Bot is starting...")
-    
-    # Create background cleanup task
     loop = asyncio.get_event_loop()
     loop.create_task(periodic_cleanup())
-    
     app.run()

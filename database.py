@@ -118,3 +118,14 @@ def get_stats():
             }
     finally:
         put_connection(conn)
+
+def get_all_users():
+    """Retrieve all unique user IDs for broadcasting."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT user_id FROM usage_logs")
+            rows = cur.fetchall()
+            return [row[0] for row in rows]
+    finally:
+        put_connection(conn)
