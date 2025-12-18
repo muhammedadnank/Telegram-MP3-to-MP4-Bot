@@ -90,6 +90,12 @@ class TelegramLogger(proglog.ProgressBarLogger):
                     # Optional: print for server logs
                     if bar_data['index'] % 100 == 0:
                         print(f"DEBUG: Bar '{bar_name}' progress: {bar_data['index']}/{bar_data['total']}")
+        
+        if 'message' in changes:
+            # Clean up MoviePy messages
+            msg = changes['message'].replace("MoviePy - ", "")
+            self.progress_dict['status'] = msg
+            print(f"DEBUG: Status Update: {msg}")
 
 @app.on_callback_query()
 async def callback_handler(client, callback_query: CallbackQuery):
@@ -307,18 +313,18 @@ async def audio_handler(client, message: Message):
             while not conv_done.is_set():
                 if ongoing_tasks[user_id].is_set():
                     break
+                status_text = conv_current_total.get('status', "Processing Video...")
                 if conv_current_total['total'] > 0:
                     box = create_progress_box(
                         conv_current_total['current'], 
                         conv_current_total['total'], 
-                        task_name, "Processing Video...", start_time,
+                        task_name, status_text, start_time,
                         is_bytes=False
                     )
                 else:
-                    # Show "Preparing" until MoviePy reports first frames
                     box = create_progress_box(
                         0, 100, 
-                        task_name, "Preparing Video...", start_time,
+                        task_name, status_text, start_time,
                         is_bytes=False
                     )
                 try: 
