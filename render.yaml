@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: telegram-mp3-to-mp4-bot
     env: python
     buildCommand: ./build.sh
@@ -13,5 +13,3 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      - key: PYTHON_VERSION
-        value: 3.10.0

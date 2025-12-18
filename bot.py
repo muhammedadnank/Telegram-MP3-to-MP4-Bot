@@ -1,5 +1,9 @@
 import os
 import asyncio
+import time
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import proglog
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from dotenv import load_dotenv
@@ -150,9 +154,24 @@ async def periodic_cleanup():
             print(f"Cleanup error: {e}")
         await asyncio.sleep(3600)  # Run every hour
 
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+
+def run_health_check():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    print(f"Health check server started on port {port}")
+    server.serve_forever()
+
 if __name__ == "__main__":
     # Initialize DB
     init_db()
+    
+    # Start health check server in a separate thread for Render
+    threading.Thread(target=run_health_check, daemon=True).start()
     
     # Start the bot
     print("Bot is starting...")
