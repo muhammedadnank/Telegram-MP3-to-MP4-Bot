@@ -1,21 +1,22 @@
 from moviepy import AudioFileClip, ColorClip
 from utils import CancelledError
 
-def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(360, 640), fps=24):
+def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(240, 320), fps=1):
     """
     Converts an MP3 file to an MP4 video with a black background.
+    Optimized for extremely fast processing (1 fps, low res).
     """
     try:
         # Load audio clip
         audio = AudioFileClip(input_path)
         
         # Create a black background video clip with the same duration as audio
-        # In MoviePy 2.x, we use with_duration and with_audio
-        video = ColorClip(size=resolution, color=(0, 1, 10)).with_duration(audio.duration)
+        # Using 1 FPS drastically reduces encoding time for black-screen videos
+        video = ColorClip(size=resolution, color=(0, 0, 0)).with_duration(audio.duration)
         video = video.with_audio(audio)
         
         # Write the resulting video to file
-        print(f"DEBUG: Starting write_videofile for {output_path}")
+        print(f"DEBUG: Starting ultra-fast write_videofile for {output_path}")
         video.write_videofile(
             output_path, 
             fps=fps, 
@@ -23,7 +24,11 @@ def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(360, 6
             audio_codec="aac",
             preset="ultrafast",
             threads=1, # Render Free tier is limited
-            ffmpeg_params=["-pix_fmt", "yuv420p"], # Higher compatibility
+            ffmpeg_params=[
+                "-pix_fmt", "yuv420p", 
+                "-tune", "stillimage",
+                "-crf", "28" # Slightly lower quality for much faster speed
+            ],
             logger=logger
         )
         
