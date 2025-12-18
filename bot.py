@@ -22,8 +22,36 @@ app = Client(
 
 # Ensure downloads directory exists
 DOWNLOAD_DIR = "downloads"
-if not os.path.exists(DOWNLOAD_DIR):
-    os.makedirs(DOWNLOAD_DIR)
+
+import time
+import proglog
+from utils import create_progress_box
+
+class TelegramLogger(proglog.ProgressBarLogger):
+    """Custom logger for MoviePy to capture progress."""
+    def __init__(self, data):
+        super().__init__()
+        self.data = data
+
+    def callback(self, **kwargs):
+        bar = self.bars.get('chunk') or self.bars.get('tqdm') or self.bars.get('index')
+        if bar:
+            self.data['current'] = bar['index']
+            self.data['total'] = bar['total']
+
+async def progress_callback(current, total, status_msg, task_name, status, start_time, last_update):
+    """Callback for Pyrogram to update progress UI."""
+    now = time.time()
+    # Update every 3 seconds to avoid rate matching
+    if (now - last_update[0]) < 3 and current < total:
+        return
+    
+    last_update[0] = now
+    box = create_progress_box(current, total, task_name, status, start_time)
+    try:
+        await status_msg.edit_text(f"<code>{box}</code>", parse_mode="html")
+    except Exception:
+        pass
 
 @app.on_message(filters.command("start"))
 async def start_handler(client, message: Message):
@@ -35,38 +63,66 @@ async def start_handler(client, message: Message):
 async def audio_handler(client, message: Message):
     user_id = message.from_user.id
     
-    # Check if user is already processing a file
     if not can_process(user_id):
         await message.reply_text("⏳ Please wait! I am already processing a file for you.")
         return
 
-    # Log action
     log_action(user_id, "UPLOAD_MP3")
-    
-    # Add task to database
     add_task(user_id)
     
-    status_msg = await message.reply_text("Downloading... ⏳")
+    start_time = time.time()
+    last_update = [0]
+    task_name = "MP3 to MP4 Conversion"
+    
+    # 1. Start with Download
+    initial_box = create_progress_box(0, message.audio.file_size, task_name, "Downloading Audio...", start_time)
+    status_msg = await message.reply_text(f"<code>{initial_box}</code>", parse_mode="html")
     
     try:
-        # Download the file
-        file_path = await message.download(file_name=os.path.join(DOWNLOAD_DIR, f"{message.audio.file_id}.mp3"))
+        # Step 1: Download
+        file_path = await message.download(
+            file_name=os.path.join(DOWNLOAD_DIR, f"{message.audio.file_id}.mp3"),
+            progress=progress_callback,
+            progress_args=(status_msg, task_name, "Downloading Audio...", start_time, last_update)
+        )
         
-        await status_msg.edit_text("Converting to MP4... 🎬 This may take a moment.")
-        
+        # Step 2: Conversion
         output_file = file_path.replace(".mp3", ".mp4")
-        
-        # Convert MP3 to MP4
-        # Running in a thread to prevent blocking the event loop
+        conv_current_total = {'current': 0, 'total': 100}
+        logger = TelegramLogger(conv_current_total)
+        conv_done = asyncio.Event()
+
+        async def update_conv_ui():
+            while not conv_done.is_set():
+                if conv_current_total['total'] > 0:
+                    box = create_progress_box(
+                        conv_current_total['current'], 
+                        conv_current_total['total'], 
+                        task_name, "Processing Video...", start_time,
+                        is_bytes=False
+                    )
+                    try: await status_msg.edit_text(f"<code>{box}</code>", parse_mode="html")
+                    except: pass
+                await asyncio.sleep(4)
+
+        ui_task = asyncio.create_task(update_conv_ui())
         loop = asyncio.get_event_loop()
-        success = await loop.run_in_executor(None, convert_mp3_to_mp4, file_path, output_file)
+        try:
+            success = await loop.run_in_executor(None, convert_mp3_to_mp4, file_path, output_file, logger)
+        finally:
+            conv_done.set()
+            await ui_task
         
         if success:
-            await status_msg.edit_text("Uploading... ⬆️")
+            # Step 3: Upload
+            last_update[0] = 0 # Reset for upload
+            file_size = os.path.getsize(output_file)
             await message.reply_video(
                 video=output_file,
                 caption="✅ Here is your MP4 video!",
-                duration=message.audio.duration
+                duration=message.audio.duration,
+                progress=progress_callback,
+                progress_args=(status_msg, task_name, "Uploading Result...", start_time, last_update)
             )
             await status_msg.delete()
             log_action(user_id, "CONVERSION_SUCCESS")
@@ -75,16 +131,13 @@ async def audio_handler(client, message: Message):
             log_action(user_id, "CONVERSION_FAILED")
 
         # Cleanup
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        if os.path.exists(output_file):
-            os.remove(output_file)
+        if os.path.exists(file_path): os.remove(file_path)
+        if os.path.exists(output_file): os.remove(output_file)
 
     except Exception as e:
         print(f"Error: {e}")
-        await message.reply_text("❌ An unexpected error occurred during processing.")
+        await message.reply_text(f"❌ Error: {str(e)}")
     finally:
-        # Remove task from database
         remove_task(user_id)
 
 async def periodic_cleanup():
