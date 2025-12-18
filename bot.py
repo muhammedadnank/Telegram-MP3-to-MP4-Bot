@@ -81,12 +81,15 @@ class TelegramLogger(proglog.ProgressBarLogger):
         if self.cancel_event.is_set():
             raise CancelledError("Task cancelled during conversion.")
         
+        # Log any bars that show up
         if 'bars' in changes:
             for bar_name, bar_data in changes['bars'].items():
-                # MoviePy 2.x often uses 'chunk' or 'bar' instead of 't'
-                # We update the progress with any active bar
-                self.progress_dict['current'] = bar_data['index']
-                self.progress_dict['total'] = bar_data['total']
+                if bar_data['total'] > 1: # Ignore tiny bars
+                    self.progress_dict['current'] = bar_data['index']
+                    self.progress_dict['total'] = bar_data['total']
+                    # Optional: print for server logs
+                    if bar_data['index'] % 100 == 0:
+                        print(f"DEBUG: Bar '{bar_name}' progress: {bar_data['index']}/{bar_data['total']}")
 
 @app.on_callback_query()
 async def callback_handler(client, callback_query: CallbackQuery):

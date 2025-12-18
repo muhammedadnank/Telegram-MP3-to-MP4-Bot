@@ -15,13 +15,15 @@ def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(720, 1
         video = video.with_audio(audio)
         
         # Write the resulting video to file
+        print(f"DEBUG: Starting write_videofile for {output_path}")
         video.write_videofile(
             output_path, 
             fps=fps, 
             codec="libx264", 
             audio_codec="aac",
             preset="ultrafast",
-            threads=4,
+            threads=1, # Render Free tier is limited
+            ffmpeg_params=["-pix_fmt", "yuv420p"], # Higher compatibility
             logger=logger
         )
         
