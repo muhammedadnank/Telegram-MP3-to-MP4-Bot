@@ -8,20 +8,29 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Connection pool to manage connections efficiently
-try:
-    postgreSQL_pool = psycopg2.pool.SimpleConnectionPool(1, 10, DATABASE_URL)
-    if postgreSQL_pool:
-        print("Connection pool created successfully")
-except (Exception, psycopg2.DatabaseError) as error:
-    print("Error while connecting to PostgreSQL", error)
+postgreSQL_pool = None
+
+def init_pool():
+    global postgreSQL_pool
+    try:
+        if not postgreSQL_pool:
+            postgreSQL_pool = psycopg2.pool.SimpleConnectionPool(1, 10, DATABASE_URL)
+            if postgreSQL_pool:
+                print("Connection pool created successfully")
+    except (Exception, psycopg2.DatabaseError) as error:
+        print("Error while connecting to PostgreSQL", error)
 
 def get_connection():
+    if not postgreSQL_pool:
+        init_pool()
     return postgreSQL_pool.getconn()
 
 def put_connection(conn):
-    postgreSQL_pool.putconn(conn)
+    if postgreSQL_pool:
+        postgreSQL_pool.putconn(conn)
 
 def init_db():
+    init_pool()
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -77,9 +86,7 @@ def cleanup_old_data(hours=24):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Remove tasks older than 1 hour (assuming they are stuck)
             cur.execute("DELETE FROM tasks WHERE started_at < NOW() - INTERVAL '1 hour'")
-            # Remove logs older than 'hours'
             cur.execute("DELETE FROM usage_logs WHERE timestamp < NOW() - INTERVAL '%s hours'", (hours,))
             conn.commit()
     finally:
@@ -99,15 +106,12 @@ def get_stats():
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Get active tasks
             cur.execute("SELECT COUNT(*) FROM tasks")
             active_tasks = cur.fetchone()[0]
             
-            # Get total conversions
             cur.execute("SELECT COUNT(*) FROM usage_logs WHERE action = 'CONVERSION_SUCCESS'")
             total_conversions = cur.fetchone()[0]
             
-            # Get unique users
             cur.execute("SELECT COUNT(DISTINCT user_id) FROM usage_logs")
             unique_users = cur.fetchone()[0]
             
