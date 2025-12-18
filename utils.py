@@ -1,6 +1,10 @@
 import time
 import math
 
+class CancelledError(Exception):
+    """Custom exception to handle task cancellation."""
+    pass
+
 def format_bytes(size):
     """Formats bytes into a human-readable string."""
     if not size:

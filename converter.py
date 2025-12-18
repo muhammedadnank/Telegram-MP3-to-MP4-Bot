@@ -1,5 +1,5 @@
-import os
 from moviepy import AudioFileClip, ColorClip
+from utils import CancelledError
 
 def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(720, 1280), fps=24):
     """
@@ -27,6 +27,9 @@ def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(720, 1
         audio.close()
         video.close()
         return True
+    except CancelledError:
+        # Propagate cancellation
+        raise
     except Exception as e:
         print(f"Error during conversion: {e}")
         return False
