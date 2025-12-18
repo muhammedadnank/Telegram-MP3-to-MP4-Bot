@@ -7,7 +7,7 @@ import proglog
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
-from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data, get_stats, get_all_users
+from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data, get_stats, get_all_users, clear_all_tasks
 from converter import convert_mp3_to_mp4
 from utils import create_progress_box, CancelledError
 
@@ -199,11 +199,18 @@ async def admin_stats_handler(client, message: Message):
     admin_text = (
         "👑 <b>Admin Dashboard - Stats</b>\n\n"
         f"✅ <b>Successful Conversions:</b> {stats['total_conversions']}\n"
-        f"👥 <b>Total Users in Database:</b> {stats['unique_users']}\n"
+        f"👥 <b>Total Users:</b> {stats['unique_users']}\n"
         f"⏳ <b>Current Processing Tasks:</b> {stats['active_tasks']}\n"
-        f"📁 <b>Temporary Dir Files:</b> {len(os.listdir(DOWNLOAD_DIR))}"
+        f"📁 <b>Temporary Dir Files:</b> {len(os.listdir(DOWNLOAD_DIR))}\n\n"
+        "<i>Use /clearall if tasks are stuck globally.</i>"
     )
     await message.reply_text(admin_text, parse_mode=enums.ParseMode.HTML)
+
+@app.on_message(filters.command("clearall") & filters.user(OWNER_ID))
+async def clear_all_handler(client, message: Message):
+    clear_all_tasks()
+    ongoing_tasks.clear()
+    await message.reply_text("🚨 <b>Emergency Reset Complete:</b> All tasks cleared from DB and memory.", parse_mode=enums.ParseMode.HTML)
 
 # CORE AUDIO HANDLER
 @app.on_message(filters.audio)
@@ -211,7 +218,7 @@ async def audio_handler(client, message: Message):
     user_id = message.from_user.id
     
     if not can_process(user_id):
-        await message.reply_text("⏳ Please wait! I am already processing a file for you.")
+        await message.reply_text("⏳ <b>I am already processing a file for you.</b>\n\nIf you think this is a mistake or the bot is stuck, use /cancel to clear it.")
         return
 
     log_action(user_id, "UPLOAD_MP3")
