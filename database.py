@@ -129,3 +129,13 @@ def get_all_users():
             return [row[0] for row in rows]
     finally:
         put_connection(conn)
+
+def clear_all_tasks():
+    """Emergency: Clear all processing tasks from DB."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE TABLE tasks")
+            conn.commit()
+    finally:
+        put_connection(conn)

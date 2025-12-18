@@ -150,9 +150,20 @@ async def status_handler(client, message: Message):
 @app.on_message(filters.command("cancel"))
 async def cancel_command_handler(client, message: Message):
     user_id = message.from_user.id
+    cancelled = False
+    
+    # Check memory first
     if user_id in ongoing_tasks:
         ongoing_tasks[user_id].set()
-        await message.reply_text("⏳ <b>Cancelling your active task...</b>", parse_mode=enums.ParseMode.HTML)
+        cancelled = True
+    
+    # Always check/clear DB just in case of ghost tasks
+    if not can_process(user_id):
+        remove_task(user_id)
+        cancelled = True
+        
+    if cancelled:
+        await message.reply_text("✅ <b>Any active or stuck tasks have been cleared.</b> You can send a new file now.", parse_mode=enums.ParseMode.HTML)
     else:
         await message.reply_text("❌ <b>You have no active tasks to cancel.</b>", parse_mode=enums.ParseMode.HTML)
 
