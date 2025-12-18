@@ -39,7 +39,6 @@ START_BUTTONS = InlineKeyboardMarkup([[
     InlineKeyboardButton("📖 Help", callback_data="help_ui"),
     InlineKeyboardButton("📊 Status", callback_data="status_ui")
 ], [
-    InlineKeyboardButton("📜 Commands", callback_data="commands_ui"),
     InlineKeyboardButton("❌ Cancel Active", callback_data="cancel_task")
 ]])
 
@@ -81,7 +80,6 @@ async def callback_handler(client, callback_query: CallbackQuery):
             "🛠 <b>Available Commands:</b>\n"
             "• /start - Restart the bot\n"
             "• /status - Check bot load and stats\n"
-            "• /commands - List all commands\n"
             "• /help - Show this help message\n\n"
             "🛑 <b>Features:</b>\n"
             "- Real-time progress tracking\n"
@@ -89,16 +87,6 @@ async def callback_handler(client, callback_query: CallbackQuery):
             "- Automatic cleanup of temporary files"
         )
         await callback_query.message.edit_text(help_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
-        
-    elif data == "commands_ui":
-        commands_text = (
-            "📜 <b>Command List:</b>\n\n"
-            "• /start - Start/Reset the bot\n"
-            "• /help - Get usage instructions\n"
-            "• /status - View bot performance & stats\n"
-            "• /commands - Show this list"
-        )
-        await callback_query.message.edit_text(commands_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
         
     elif data == "status_ui":
         stats = get_stats()
@@ -138,7 +126,6 @@ async def help_ui_message(message: Message):
         "• /start - Restart the bot\n"
         "• /status - Check bot load and stats\n"
         "• /cancel - Cancel your active task\n"
-        "• /commands - List all commands\n"
         "• /help - Show this help message\n\n"
         "🛑 <b>Features:</b>\n"
         "- Real-time progress tracking\n"
@@ -147,17 +134,6 @@ async def help_ui_message(message: Message):
     )
     await message.reply_text(help_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
 
-@app.on_message(filters.command("commands"))
-async def commands_list_handler(client, message: Message):
-    commands_text = (
-        "📜 <b>Command List:</b>\n\n"
-        "• /start - Start/Reset the bot\n"
-        "• /help - Get usage instructions\n"
-        "• /status - View bot performance & stats\n"
-        "• /cancel - Cancel your active task\n"
-        "• /commands - Show this list"
-    )
-    await message.reply_text(commands_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
 
 @app.on_message(filters.command("status"))
 async def status_handler(client, message: Message):

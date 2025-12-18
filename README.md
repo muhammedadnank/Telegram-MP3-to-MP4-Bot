@@ -26,7 +26,6 @@ A professional Telegram bot built with **Pyrogram** and **MoviePy** that convert
 - `/help` - View detailed usage instructions and features.
 - `/status` - Check current bot load and global stats.
 - `/cancel` - Abort your active processing task immediately.
-- `/commands` - Display a quick list of all available commands.
 
 ### 👑 Admin Commands (Owner Only)
 - `/users` - See total unique users in the database.
