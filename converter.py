@@ -1,7 +1,7 @@
 from moviepy import AudioFileClip, ColorClip
 from utils import CancelledError
 
-def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(240, 320), fps=1):
+def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(144, 256), fps=1):
     """
     Converts an MP3 file to an MP4 video with a black background.
     Optimized for extremely fast processing (1 fps, low res).
