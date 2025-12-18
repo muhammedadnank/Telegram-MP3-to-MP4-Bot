@@ -5,6 +5,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import proglog
 from pyrogram import Client, filters, enums
+from pyrogram.errors import FloodWait
+import time
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
 from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data, get_stats, get_all_users, clear_all_tasks
@@ -338,6 +340,10 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is running!")
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
 def run_health_check():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
@@ -350,4 +356,14 @@ if __name__ == "__main__":
     print("Bot is starting...")
     loop = asyncio.get_event_loop()
     loop.create_task(periodic_cleanup())
-    app.run()
+    
+    while True:
+        try:
+            app.run()
+            break # Exit loop if bot stops normally
+        except FloodWait as e:
+            print(f"Telegram FloodWait: Must wait for {e.value} seconds.")
+            time.sleep(e.value + 5) # Adding a buffer
+        except Exception as e:
+            print(f"Bot crashed: {e}")
+            time.sleep(10) # Brief pause before restart
