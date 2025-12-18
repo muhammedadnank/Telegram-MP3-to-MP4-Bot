@@ -3,7 +3,7 @@ services:
     name: telegram-mp3-to-mp4-bot
     env: python
     buildCommand: ./build.sh
-    startCommand: python bot.py
+    startCommand: python3 main.py
     envVars:
       - key: API_ID
         sync: false
@@ -12,4 +12,6 @@ services:
       - key: BOT_TOKEN
         sync: false
       - key: DATABASE_URL
+        sync: false
+      - key: OWNER_ID
         sync: false
