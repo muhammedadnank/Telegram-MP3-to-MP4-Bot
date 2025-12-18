@@ -20,6 +20,8 @@ def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(720, 1
             fps=fps, 
             codec="libx264", 
             audio_codec="aac",
+            preset="ultrafast",
+            threads=4,
             logger=logger
         )
         

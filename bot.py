@@ -83,9 +83,10 @@ class TelegramLogger(proglog.ProgressBarLogger):
         
         if 'bars' in changes:
             for bar_name, bar_data in changes['bars'].items():
-                if bar_name == 't':
-                    self.progress_dict['current'] = bar_data['index']
-                    self.progress_dict['total'] = bar_data['total']
+                # MoviePy 2.x often uses 'chunk' or 'bar' instead of 't'
+                # We update the progress with any active bar
+                self.progress_dict['current'] = bar_data['index']
+                self.progress_dict['total'] = bar_data['total']
 
 @app.on_callback_query()
 async def callback_handler(client, callback_query: CallbackQuery):
@@ -295,7 +296,7 @@ async def audio_handler(client, message: Message):
         
         # Step 2: Conversion
         output_file = file_path.replace(".mp3", ".mp4")
-        conv_current_total = {'current': 0, 'total': 100}
+        conv_current_total = {'current': 0, 'total': 0}
         logger = TelegramLogger(conv_current_total, ongoing_tasks[user_id])
         conv_done = asyncio.Event()
 
@@ -310,13 +311,21 @@ async def audio_handler(client, message: Message):
                         task_name, "Processing Video...", start_time,
                         is_bytes=False
                     )
-                    try: 
-                        await status_msg.edit_text(
-                            f"<code>{box}</code>", 
-                            parse_mode=enums.ParseMode.HTML,
-                            reply_markup=reply_markup
-                        )
-                    except: pass
+                else:
+                    # Show "Preparing" until MoviePy reports first frames
+                    box = create_progress_box(
+                        0, 100, 
+                        task_name, "Preparing Video...", start_time,
+                        is_bytes=False
+                    )
+                try: 
+                    await status_msg.edit_text(
+                        f"<code>{box}</code>", 
+                        parse_mode=enums.ParseMode.HTML,
+                        reply_markup=reply_markup
+                    )
+                except:
+                    pass
                 await asyncio.sleep(4)
 
         ui_task = asyncio.create_task(update_conv_ui())
