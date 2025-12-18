@@ -1,10 +1,10 @@
 import asyncio
 import threading
 import time
-from pyrogram.errors import FloodWait
+from telethon.errors import FloodWaitError
 
 # Import modular components
-from bot.client import app
+from bot.client import client
 from bot.handlers import * # Ensures handlers are registered
 from database.manager import init_db, cleanup_old_data
 from web.health import run_health_check
@@ -20,15 +20,16 @@ async def periodic_cleanup():
         await asyncio.sleep(3600)  # Run every hour
 
 def start_bot():
-    """Start the Pyrogram bot with retry logic."""
+    """Start the Telethon bot with retry logic."""
     print("Bot is starting...")
     while True:
         try:
-            app.run()
+            # Telethon already started in bot/client.py
+            client.run_until_disconnected()
             break
-        except FloodWait as e:
-            print(f"Telegram FloodWait: Must wait for {e.value} seconds.")
-            time.sleep(e.value + 5)
+        except FloodWaitError as e:
+            print(f"Telegram FloodWait: Must wait for {e.seconds} seconds.")
+            time.sleep(e.seconds + 5)
         except Exception as e:
             print(f"Bot crashed: {e}")
             time.sleep(10)
@@ -41,7 +42,12 @@ if __name__ == "__main__":
     threading.Thread(target=run_health_check, daemon=True).start()
     
     # 3. Setup cleanup task in the event loop
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
     loop.create_task(periodic_cleanup())
     
     # 4. Start the Bot

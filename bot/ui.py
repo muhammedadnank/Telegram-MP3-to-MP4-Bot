@@ -1,8 +1,7 @@
 import time
 import math
 import proglog
-from pyrogram import enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telethon import Button
 from core.converter import CancelledError
 
 def format_bytes(size):
@@ -51,6 +50,11 @@ def create_progress_box(current, total, task_name, status, start_time, is_bytes=
     )
 
 async def progress_callback(current, total, status_msg, task_name, status_text, start_time, last_update, user_id, ongoing_tasks):
+    """
+    Telethon progress callback wrapper. 
+    Note: Telethon calls this with (current, total).
+    We use a wrapper to pass extra context.
+    """
     if user_id in ongoing_tasks and ongoing_tasks[user_id].is_set():
         raise CancelledError("Task cancelled by user.")
     
@@ -61,12 +65,10 @@ async def progress_callback(current, total, status_msg, task_name, status_text, 
     box = create_progress_box(current, total, task_name, status_text, start_time)
     
     try:
-        await status_msg.edit_text(
+        await status_msg.edit(
             f"<code>{box}</code>",
-            parse_mode=enums.ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("Cancel ❌", callback_data="cancel_task")
-            ]])
+            parse_mode='html',
+            buttons=[[Button.inline("Cancel ❌", data=b"cancel_task")]]
         )
     except:
         pass

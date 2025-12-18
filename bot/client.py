@@ -1,19 +1,19 @@
 import os
-from pyrogram import Client
+from telethon import TelegramClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
-API_ID = os.getenv("API_ID")
+API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-app = Client(
+# Initialize Telethon Client
+client = TelegramClient(
     "mp3_to_mp4_bot",
     api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
+    api_hash=API_HASH
+).start(bot_token=BOT_TOKEN)
 
 OWNER_ID = int(os.getenv("OWNER_ID", "1751433177"))
 DOWNLOAD_DIR = "downloads"

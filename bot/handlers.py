@@ -1,42 +1,43 @@
 import os
 import asyncio
 import time
-from pyrogram import filters, enums
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from telethon import events, Button
+from telethon.tl.types import DocumentAttributeAudio
 
-from bot.client import app, ongoing_tasks, OWNER_ID, DOWNLOAD_DIR
+from bot.client import client, ongoing_tasks, OWNER_ID, DOWNLOAD_DIR
 from bot.ui import progress_callback, TelegramLogger, create_progress_box
 from database.manager import add_task, remove_task, can_process, log_action, get_stats, get_all_users, clear_all_tasks
 from core.converter import convert_mp3_to_mp4, CancelledError
 
 # BUTTONS
-START_BUTTONS = InlineKeyboardMarkup([[
-    InlineKeyboardButton("📖 Help", callback_data="help_ui"),
-    InlineKeyboardButton("📊 Status", callback_data="status_ui")
-], [
-    InlineKeyboardButton("❌ Cancel Active", callback_data="cancel_task")
-]])
+START_BUTTONS = [
+    [
+        Button.inline("📖 Help", data=b"help_ui"),
+        Button.inline("📊 Status", data=b"status_ui")
+    ],
+    [
+        Button.inline("❌ Cancel Active", data=b"cancel_task")
+    ]
+]
 
-BACK_BUTTON = InlineKeyboardMarkup([[
-    InlineKeyboardButton("⬅️ Back", callback_data="start_ui")
-]])
+BACK_BUTTON = [[Button.inline("⬅️ Back", data=b"start_ui")]]
 
-@app.on_callback_query()
-async def callback_handler(client, callback_query: CallbackQuery):
-    data = callback_query.data
-    user_id = callback_query.from_user.id
+@client.on(events.CallbackQuery())
+async def callback_handler(event):
+    data = event.data
+    user_id = event.sender_id
     
-    if data == "cancel_task":
+    if data == b"cancel_task":
         if user_id in ongoing_tasks:
             ongoing_tasks[user_id].set()
-            await callback_query.answer("Cancelling task... ⏳", show_alert=True)
+            await event.answer("Cancelling task... ⏳", alert=True)
         else:
-            await callback_query.answer("No active task to cancel.", show_alert=True)
-            try: await callback_query.message.delete()
+            await event.answer("No active task to cancel.", alert=True)
+            try: await event.delete()
             except: pass
             
-    elif data == "start_ui":
-        await callback_query.message.edit_text(
+    elif data == b"start_ui":
+        await event.edit(
             "👋 <b>Welcome to MP3 to MP4 Bot!</b>\n\n"
             "I can convert your MP3 audio files into high-quality MP4 videos with a professional black background.\n\n"
             "⚡ <b>How to Use:</b>\n"
@@ -44,11 +45,11 @@ async def callback_handler(client, callback_query: CallbackQuery):
             "2. Wait for the conversion to complete.\n"
             "3. Download your MP4 video!\n\n"
             "📖 Use the buttons below for more info.",
-            parse_mode=enums.ParseMode.HTML,
-            reply_markup=START_BUTTONS
+            parse_mode='html',
+            buttons=START_BUTTONS
         )
         
-    elif data == "help_ui":
+    elif data == b"help_ui":
         help_text = (
             "❓ <b>Need Help?</b>\n\n"
             "This bot is designed to create black-background videos from audio files.\n\n"
@@ -61,9 +62,9 @@ async def callback_handler(client, callback_query: CallbackQuery):
             "- Reliable task cancellation\n"
             "- Automatic cleanup"
         )
-        await callback_query.message.edit_text(help_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
+        await event.edit(help_text, parse_mode='html', buttons=BACK_BUTTON)
         
-    elif data == "status_ui":
+    elif data == b"status_ui":
         stats = get_stats()
         status_text = (
             "🤖 <b>Bot Status Report</b>\n\n"
@@ -72,20 +73,20 @@ async def callback_handler(client, callback_query: CallbackQuery):
             f"⏳ <b>Current Load:</b> {stats['active_tasks']} active tasks\n\n"
             "✨ <i>Running smoothly on Render!</i>"
         )
-        await callback_query.message.edit_text(status_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
+        await event.edit(status_text, parse_mode='html', buttons=BACK_BUTTON)
 
-@app.on_message(filters.command("start"))
-async def start_handler(client, message: Message):
-    await message.reply_text(
+@client.on(events.NewMessage(pattern='/start'))
+async def start_handler(event):
+    await event.reply(
         "👋 <b>Welcome to MP3 to MP4 Bot!</b>\n\n"
         "I can convert your MP3 audio files into high-quality MP4 videos.\n\n"
         "📖 Use the buttons below for more info.",
-        parse_mode=enums.ParseMode.HTML,
-        reply_markup=START_BUTTONS
+        parse_mode='html',
+        buttons=START_BUTTONS
     )
 
-@app.on_message(filters.command("help"))
-async def help_handler(client, message: Message):
+@client.on(events.NewMessage(pattern='/help'))
+async def help_handler(event):
     help_text = (
         "❓ <b>Need Help?</b>\n\n"
         "• /start - Restart the bot\n"
@@ -93,10 +94,10 @@ async def help_handler(client, message: Message):
         "• /cancel - Cancel your active task\n"
         "• /help - Show this help message"
     )
-    await message.reply_text(help_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
+    await event.reply(help_text, parse_mode='html', buttons=BACK_BUTTON)
 
-@app.on_message(filters.command("status"))
-async def status_handler(client, message: Message):
+@client.on(events.NewMessage(pattern='/status'))
+async def status_handler(event):
     stats = get_stats()
     status_text = (
         "🤖 <b>Bot Status Report</b>\n\n"
@@ -104,11 +105,11 @@ async def status_handler(client, message: Message):
         f"👥 <b>Unique Users:</b> {stats['unique_users']}\n"
         f"⏳ <b>Current Load:</b> {stats['active_tasks']} active tasks"
     )
-    await message.reply_text(status_text, parse_mode=enums.ParseMode.HTML, reply_markup=BACK_BUTTON)
+    await event.reply(status_text, parse_mode='html', buttons=BACK_BUTTON)
 
-@app.on_message(filters.command("cancel"))
-async def cancel_command_handler(client, message: Message):
-    user_id = message.from_user.id
+@client.on(events.NewMessage(pattern='/cancel'))
+async def cancel_command_handler(event):
+    user_id = event.sender_id
     cancelled = False
     if user_id in ongoing_tasks:
         ongoing_tasks[user_id].set()
@@ -118,34 +119,35 @@ async def cancel_command_handler(client, message: Message):
         cancelled = True
         
     if cancelled:
-        await message.reply_text("✅ <b>Tasks cleared.</b> You can send a new file now.", parse_mode=enums.ParseMode.HTML)
+        await event.reply("✅ <b>Tasks cleared.</b> You can send a new file now.", parse_mode='html')
     else:
-        await message.reply_text("❌ <b>No active tasks.</b>", parse_mode=enums.ParseMode.HTML)
+        await event.reply("❌ <b>No active tasks.</b>", parse_mode='html')
 
 # ADMIN COMMANDS
-@app.on_message(filters.command("users") & filters.user(OWNER_ID))
-async def users_handler(client, message: Message):
+@client.on(events.NewMessage(pattern='/users', from_users=OWNER_ID))
+async def users_handler(event):
     stats = get_stats()
-    await message.reply_text(f"👥 <b>Total Unique Users:</b> {stats['unique_users']}", parse_mode=enums.ParseMode.HTML)
+    await event.reply(f"👥 <b>Total Unique Users:</b> {stats['unique_users']}", parse_mode='html')
 
-@app.on_message(filters.command("broadcast") & filters.user(OWNER_ID))
-async def broadcast_handler(client, message: Message):
-    if not message.reply_to_message:
-        await message.reply_text("❌ Please reply to a message to broadcast it.")
+@client.on(events.NewMessage(pattern='/broadcast', from_users=OWNER_ID))
+async def broadcast_handler(event):
+    if not event.is_reply:
+        await event.reply("❌ Please reply to a message to broadcast it.")
         return
+    reply_msg = await event.get_reply_message()
     users = get_all_users()
     count = 0
-    status_msg = await message.reply_text(f"📣 <b>Broadcasting to {len(users)} users...</b>", parse_mode=enums.ParseMode.HTML)
+    status_msg = await event.reply(f"📣 <b>Broadcasting to {len(users)} users...</b>", parse_mode='html')
     for user_id in users:
         try:
-            await message.reply_to_message.copy(chat_id=user_id)
+            await client.send_message(user_id, reply_msg)
             count += 1
             await asyncio.sleep(0.05)
         except: pass
-    await status_msg.edit_text(f"✅ <b>Broadcast Complete!</b> Sent to {count} users.", parse_mode=enums.ParseMode.HTML)
+    await status_msg.edit(f"✅ <b>Broadcast Complete!</b> Sent to {count} users.", parse_mode='html')
 
-@app.on_message(filters.command("stats") & filters.user(OWNER_ID))
-async def admin_stats_handler(client, message: Message):
+@client.on(events.NewMessage(pattern='/stats', from_users=OWNER_ID))
+async def admin_stats_handler(event):
     stats = get_stats()
     admin_text = (
         "👑 <b>Admin Dashboard</b>\n\n"
@@ -153,20 +155,20 @@ async def admin_stats_handler(client, message: Message):
         f"👥 <b>Total Users:</b> {stats['unique_users']}\n"
         f"⏳ <b>Active Tasks:</b> {stats['active_tasks']}"
     )
-    await message.reply_text(admin_text, parse_mode=enums.ParseMode.HTML)
+    await event.reply(admin_text, parse_mode='html')
 
-@app.on_message(filters.command("clearall") & filters.user(OWNER_ID))
-async def clear_all_handler(client, message: Message):
+@client.on(events.NewMessage(pattern='/clearall', from_users=OWNER_ID))
+async def clear_all_handler(event):
     clear_all_tasks()
     ongoing_tasks.clear()
-    await message.reply_text("🚨 <b>Emergency Reset Complete.</b>", parse_mode=enums.ParseMode.HTML)
+    await event.reply("🚨 <b>Emergency Reset Complete.</b>", parse_mode='html')
 
 # AUDIO HANDLER
-@app.on_message(filters.audio)
-async def audio_handler(client, message: Message):
-    user_id = message.from_user.id
+@client.on(events.NewMessage(func=lambda e: e.message.file and e.message.file.mime_type.startswith('audio/')))
+async def audio_handler(event):
+    user_id = event.sender_id
     if not can_process(user_id):
-        await message.reply_text("⏳ <b>Already processing.</b> Use /cancel if stuck.")
+        await event.reply("⏳ <b>Already processing.</b> Use /cancel if stuck.")
         return
 
     log_action(user_id, "UPLOAD_MP3")
@@ -176,24 +178,25 @@ async def audio_handler(client, message: Message):
     last_update = [0]
     task_name = "MP3 to MP4 Conversion"
     
-    reply_markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Cancel ❌", callback_data="cancel_task")
-    ]])
+    file_size = event.file.size
+    file_id = event.file.id
     
-    initial_box = create_progress_box(0, message.audio.file_size, task_name, "Downloading Audio...", start_time)
-    status_msg = await message.reply_text(
+    initial_box = create_progress_box(0, file_size, task_name, "Downloading Audio...", start_time)
+    status_msg = await event.reply(
         f"<code>{initial_box}</code>", 
-        parse_mode=enums.ParseMode.HTML,
-        reply_markup=reply_markup
+        parse_mode='html',
+        buttons=[[Button.inline("Cancel ❌", data=b"cancel_task")]]
     )
     
     file_path = None
     output_file = None
     try:
-        file_path = await message.download(
-            file_name=os.path.join(DOWNLOAD_DIR, f"{message.audio.file_id}.mp3"),
-            progress=progress_callback,
-            progress_args=(status_msg, task_name, "Downloading Audio...", start_time, last_update, user_id, ongoing_tasks)
+        # Step 1: Download
+        file_path = os.path.join(DOWNLOAD_DIR, f"{file_id}.mp3")
+        await client.download_media(
+            event.message,
+            file=file_path,
+            progress_callback=lambda c, t: progress_callback(c, t, status_msg, task_name, "Downloading Audio...", start_time, last_update, user_id, ongoing_tasks)
         )
         
         output_file = file_path.replace(".mp3", ".mp4")
@@ -210,7 +213,7 @@ async def audio_handler(client, message: Message):
                 else:
                     box = create_progress_box(0, 100, task_name, status_text, start_time, is_bytes=False)
                 try: 
-                    await status_msg.edit_text(f"<code>{box}</code>", parse_mode=enums.ParseMode.HTML, reply_markup=reply_markup)
+                    await status_msg.edit(f"<code>{box}</code>", parse_mode='html', buttons=[[Button.inline("Cancel ❌", data=b"cancel_task")]])
                 except: pass
                 await asyncio.sleep(4)
 
@@ -226,26 +229,26 @@ async def audio_handler(client, message: Message):
         
         if success:
             last_update[0] = 0
-            await message.reply_video(
-                video=output_file,
+            # Step 3: Upload
+            await client.send_file(
+                event.chat_id,
+                output_file,
                 caption="✅ Here is your MP4 video!",
-                duration=message.audio.duration,
-                progress=progress_callback,
-                progress_args=(status_msg, task_name, "Uploading Result...", start_time, last_update, user_id, ongoing_tasks)
+                progress_callback=lambda c, t: progress_callback(c, t, status_msg, task_name, "Uploading Result...", start_time, last_update, user_id, ongoing_tasks)
             )
             await status_msg.delete()
             log_action(user_id, "CONVERSION_SUCCESS")
         else:
-            await status_msg.edit_text("❌ Conversion failed.")
+            await status_msg.edit("❌ Conversion failed.")
             log_action(user_id, "CONVERSION_FAILED")
 
     except CancelledError:
-        try: await status_msg.edit_text("⚠️ Task cancelled.")
+        try: await status_msg.edit("⚠️ Task cancelled.")
         except: pass
         log_action(user_id, "CONVERSION_CANCELLED")
     except Exception as e:
         print(f"Error: {e}")
-        try: await message.reply_text(f"❌ Error: {str(e)}")
+        try: await event.reply(f"❌ Error: {str(e)}")
         except: pass
     finally:
         if file_path and os.path.exists(file_path): os.remove(file_path)

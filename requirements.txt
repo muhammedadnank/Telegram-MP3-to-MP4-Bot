@@ -1,5 +1,4 @@
-pyrogram
-tgcrypto
+telethon
 moviepy
 pillow
 python-dotenv
