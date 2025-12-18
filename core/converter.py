@@ -22,17 +22,20 @@ def convert_mp3_to_mp4(input_path, output_path, logger='bar', resolution=(144, 2
         print(f"DEBUG: Starting ultra-fast write_videofile for {output_path}")
         video.write_videofile(
             output_path, 
-            fps=fps, 
+            fps=2, # 2 FPS is safer than 1 for many muxers
             codec="libx264", 
             audio_codec="aac",
+            audio_bitrate="128k", # Fixed bitrate for faster encoding
             preset="ultrafast",
-            threads=1, # Render Free tier is limited
+            threads=1, 
             ffmpeg_params=[
                 "-pix_fmt", "yuv420p", 
                 "-tune", "stillimage",
-                "-crf", "28" # Slightly lower quality for much faster speed
+                "-movflags", "+faststart", # Allow playing while downloading
+                "-shortest" # Ensure video ends with audio
             ],
-            logger=logger
+            logger=logger,
+            bitrate="50k" # Extremely low video bitrate since it's just black
         )
         
         # Close clips to release resources
