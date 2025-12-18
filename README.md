@@ -1,5 +1,7 @@
 # Telegram MP3 → Black Background MP4 Bot
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/muhammedadnank/Telegram-MP3-to-MP4-Bot)
+
 A simple yet powerful Telegram bot built with **Pyrogram** and **MoviePy** that converts MP3 audio files into MP4 videos with a full black background. Perfect for sharing audio on platforms that require video formats.
 
 ## 🚀 Features
