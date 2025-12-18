@@ -7,7 +7,7 @@ import proglog
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
-from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data
+from database import init_db, add_task, remove_task, can_process, log_action, cleanup_old_data, get_stats
 from converter import convert_mp3_to_mp4
 from utils import create_progress_box, CancelledError
 
@@ -88,8 +88,55 @@ async def cancel_callback_handler(client, callback_query: CallbackQuery):
 @app.on_message(filters.command("start"))
 async def start_handler(client, message: Message):
     await message.reply_text(
-        "👋 Hello! Send me an MP3 file, and I'll convert it into an MP4 video with a black background for you."
+        "👋 <b>Welcome to MP3 to MP4 Bot!</b>\n\n"
+        "I can convert your MP3 audio files into high-quality MP4 videos with a professional black background.\n\n"
+        "⚡ <b>How to Use:</b>\n"
+        "1. Send any MP3 audio file to me.\n"
+        "2. Wait for the conversion to complete.\n"
+        "3. Download your MP4 video!\n\n"
+        "📖 Use /help to see more options and commands.",
+        parse_mode="html"
     )
+
+@app.on_message(filters.command("help"))
+async def help_handler(client, message: Message):
+    help_text = (
+        "❓ <b>Need Help?</b>\n\n"
+        "This bot is designed to create black-background videos from audio files. Perfect for uploading music to platforms like YouTube or Telegram as video.\n\n"
+        "🛠 <b>Available Commands:</b>\n"
+        "• /start - Restart the bot\n"
+        "• /status - Check bot load and stats\n"
+        "• /commands - List all commands\n"
+        "• /help - Show this help message\n\n"
+        "🛑 <b>Features:</b>\n"
+        "- Real-time progress tracking\n"
+        "- Reliable task cancellation\n"
+        "- Automatic cleanup of temporary files"
+    )
+    await message.reply_text(help_text, parse_mode="html")
+
+@app.on_message(filters.command("commands"))
+async def commands_list_handler(client, message: Message):
+    commands_text = (
+        "📜 <b>Command List:</b>\n\n"
+        "• /start - Start/Reset the bot\n"
+        "• /help - Get usage instructions\n"
+        "• /status - View bot performance & stats\n"
+        "• /commands - Show this list"
+    )
+    await message.reply_text(commands_text, parse_mode="html")
+
+@app.on_message(filters.command("status"))
+async def status_handler(client, message: Message):
+    stats = get_stats()
+    status_text = (
+        "🤖 <b>Bot Status Report</b>\n\n"
+        f"📊 <b>Total Processed:</b> {stats['total_conversions']}\n"
+        f"👥 <b>Unique Users:</b> {stats['unique_users']}\n"
+        f"⏳ <b>Current Load:</b> {stats['active_tasks']} active tasks\n\n"
+        "✨ <i>Running smoothly on Render!</i>"
+    )
+    await message.reply_text(status_text, parse_mode="html")
 
 @app.on_message(filters.audio)
 async def audio_handler(client, message: Message):

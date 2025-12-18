@@ -93,3 +93,28 @@ def log_action(user_id, action):
             conn.commit()
     finally:
         put_connection(conn)
+
+def get_stats():
+    """Retrieve bot usage statistics."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Get active tasks
+            cur.execute("SELECT COUNT(*) FROM tasks")
+            active_tasks = cur.fetchone()[0]
+            
+            # Get total conversions
+            cur.execute("SELECT COUNT(*) FROM usage_logs WHERE action = 'CONVERSION_SUCCESS'")
+            total_conversions = cur.fetchone()[0]
+            
+            # Get unique users
+            cur.execute("SELECT COUNT(DISTINCT user_id) FROM usage_logs")
+            unique_users = cur.fetchone()[0]
+            
+            return {
+                "active_tasks": active_tasks,
+                "total_conversions": total_conversions,
+                "unique_users": unique_users
+            }
+    finally:
+        put_connection(conn)
