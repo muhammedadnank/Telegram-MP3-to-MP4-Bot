@@ -1,0 +1,6 @@
+pyrogram
+tgcrypto
+moviepy
+pillow
+python-dotenv
+psycopg2-binary
